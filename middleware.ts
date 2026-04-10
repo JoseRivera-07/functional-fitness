@@ -19,93 +19,45 @@ import { createServerClient } from '@/lib/supabase/server';
  * Se ejecuta ANTES de que llegue el request a las pages/api routes
  */
 export async function middleware(request: NextRequest) {
-  // Iniciar respuesta que pasará al siguiente middleware/handler
   let response = NextResponse.next({
     request,
   });
 
   try {
-    // ============ PASO 1: CREAR CLIENTE SUPABASE ============
     const supabase = createServerClient(request.cookies);
 
-    // ============ PASO 2: OBTENER SESIÓN ACTUAL ============
     const {
       data: { user },
-      error: authError,
     } = await supabase.auth.getUser();
 
-    // ============ PASO 3: DEFINIR RUTAS PROTEGIDAS ============
     const pathname = request.nextUrl.pathname;
     const isLoginPage = pathname === '/login';
     const isDashboard = pathname.startsWith('/dashboard');
     const isAdmin = pathname.startsWith('/admin');
     const isRoot = pathname === '/';
 
-    // ============ PASO 4: LÓGICA DE AUTENTICACIÓN ============
-
-    // Si NO hay sesión (usuario no autenticado)
-    if (!user || authError) {
-      // Permitir acceso a /login
+    // Sin sesión → redirigir a login (excepto si ya está en login)
+    if (!user) {
       if (isLoginPage) {
         return response;
       }
-
-      // Redirigir rutas protegidas a /login
-      if (isDashboard || isAdmin) {
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
-
-      // Redirigir root a /login
-      if (isRoot) {
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
-
-      return response;
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // ============ PASO 5: OBTENER ROL DEL USUARIO ============
-    const {
-      data: profile,
-      error: profileError,
-    } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    // Si hay error al obtener el perfil, no confiar en el rol
-    const userRole = profileError || !profile ? 'client' : profile.role;
-
-    // ============ PASO 6: LÓGICA DE AUTORIZACIÓN ============
-
-    // Si usuario autenticado intenta /login → redirigir al dashboard/admin según rol
-    if (isLoginPage) {
-      const redirectUrl = userRole === 'admin' ? '/admin' : '/dashboard';
-      return NextResponse.redirect(new URL(redirectUrl, request.url));
-    }
-
-    // Si usuario intenta /admin pero NO es admin → redirigir a /dashboard
-    if (isAdmin && userRole !== 'admin') {
+    // Autenticado en /login → redirigir a /dashboard
+    if (isLoginPage && user) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // Si usuario intenta /dashboard pero ES admin → redirigir a /admin
-    if (isDashboard && userRole === 'admin') {
-      return NextResponse.redirect(new URL('/admin', request.url));
+    // Autenticado en / → redirigir a /dashboard
+    if (isRoot && user) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // Si usuario autenticado accede a / → redirigir según rol
-    if (isRoot) {
-      const redirectUrl = userRole === 'admin' ? '/admin' : '/dashboard';
-      return NextResponse.redirect(new URL(redirectUrl, request.url));
-    }
-
-    // ============ PASO 7: RETORNAR RESPUESTA ============
-    // El usuario tiene permiso para acceder a esta ruta
+    // Permitir acceso a /dashboard y /admin
+    // El page.tsx de cada ruta verificará el rol
     return response;
   } catch (error) {
-    // En caso de error no esperado, permitir el request
-    // (mejor que bloquear todo por un error temporal)
     console.error('Middleware error:', error);
     return response;
   }

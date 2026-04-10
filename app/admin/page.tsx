@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import AdminClient from '@/components/AdminClient';
 
 export default async function AdminPage() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(cookieStore);
 
   // Verificar sesión
@@ -14,22 +14,13 @@ export default async function AdminPage() {
     redirect('/login');
   }
 
-  // Verificar rol
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile || profile.role !== 'admin') {
-    redirect('/login');
-  }
-
-  // Obtener datos para el admin
+  // Obtener todas las usuarias
   const { data: users } = await supabase
     .from('profiles')
-    .select('id, name, phone, created_at');
+    .select('id, name, phone, created_at')
+    .order('created_at', { ascending: false });
 
+  // Obtener todas las membresías
   const { data: memberships } = await supabase
     .from('memberships')
     .select('user_id, last_payment, next_payment, status, activated_at');

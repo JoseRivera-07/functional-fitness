@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import DashboardClient from '@/components/DashboardClient';
 
 export default async function DashboardPage() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(cookieStore);
 
   // Verificar sesión
@@ -14,18 +14,10 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // Verificar rol
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, name')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile || profile.role !== 'client') {
-    redirect('/login');
-  }
+  // Obtener nombre del usuario
+  const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
 
   return (
-    <DashboardClient userName={profile.name} userId={user.id} />
+    <DashboardClient userName={userName} userId={user.id} />
   );
 }
